@@ -1,4 +1,10 @@
 import java.util.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 public class App {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -27,8 +33,9 @@ public class App {
                 }
             }
 
-            System.out.println("Введите продукты (формат: Название = Цена; ...):");
+            System.out.println("Введите продукты (формат: Название = Цена | НАЗВАНИЕ = ЦЕНА@СКИДКА% ДО ДАТЫ):");
             String inputProducts = scanner.nextLine();
+            SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
             for (String entry : inputProducts.split(";")) {
                 if (entry.isBlank()) continue;
 
@@ -39,15 +46,51 @@ public class App {
                 }
 
                 String name = parts[0].trim();
-                int price = Integer.parseInt(parts[1].trim());
+                String priceInfo = parts[1].trim();
 
-                try {
-                    products.add(new Product(name, price));
-                } catch (IllegalArgumentException e) {
-                    System.err.println("Ошибка: " + e.getMessage());
+                // Обрабатываем случай наличия скидки
+                if (priceInfo.contains("@")) {
+                    String[] priceAndDiscount = priceInfo.split("@");
+                    if (priceAndDiscount.length != 2) {
+                        System.err.println("Ошибка: неверный формат скидки для продукта '" + name + "'");
+                        continue;
+                    }
+
+                    int originalPrice = Integer.parseInt(priceAndDiscount[0]);
+                    String discountDetails = priceAndDiscount[1];
+
+                    // Разбираем строку скидки (процент и срок действия)
+                    String[] discountParts = discountDetails.split(" ");
+                    if (discountParts.length != 2) {
+                        System.err.println("Ошибка: неверный формат скидки для продукта '" + name + "'");
+                        continue;
+                    }
+
+                    double discountPercentage = Double.parseDouble(discountParts[0].replace("%", ""));
+                    Date dateUtil;
+                    try {
+                        dateUtil = sdf.parse(discountParts[1]);
+
+                        // Преобразование Date в LocalDateTime
+                        Instant instant = dateUtil.toInstant();
+                        LocalDateTime expirationDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+
+                        // Создаем объект DiscountProduct
+                        products.add(new DiscountProduct(name, originalPrice, discountPercentage, expirationDate));
+                    } catch (ParseException ex) {
+                        System.err.println("Ошибка: неверный формат даты для продукта '" + name + "', используйте dd-MM-yyyy");
+                        continue;
+                    }
+                } else {
+                    // Простой продукт без скидки
+                    int price = Integer.parseInt(priceInfo);
+                    try {
+                        products.add(new Product(name, price));
+                    } catch (IllegalArgumentException e) {
+                        System.err.println("Ошибка: " + e.getMessage());
+                    }
                 }
             }
-
             System.out.println("Введите покупки (формат: Имя - Название продукта), для завершения введите END:");
             while (true) {
                 String purchaseLine = scanner.nextLine();
